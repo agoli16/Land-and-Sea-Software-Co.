@@ -256,12 +256,12 @@ export default function UserLogsViewer({
           logsNew.filter(item => {
             const timestamp = item.timestamp
             return logStartDate ? timestamp >= logStartDate && timestamp <= logsEndDate : timestamp <= logsEndDate
-          }).map((log)=>{
+          }).map((log, idx)=>{
             return (
-              <div style={{padding: "5px", borderBottom: "1px solid #eee",display:"flex"}} key={log.key}>
+              <div style={{padding: "5px", borderBottom: "1px solid #eee",display:"flex"}} key={idx}>
                 <div style={{width: "220px", paddingRight: "20px", display:"table-cell"}}>
                   <b>{Moment(parseInt(log.timestamp)).format('MMM D YYYY H:mm:ss')}</b><br />
-                  <span style={{fontSize: ".8em"}}>{log.appDetails ? `${allApps[log.appDetails.appId].name}, ${log.appDetails.platform.toUpperCase()}, ${log.appDetails.appVersion}` : ""}</span>
+                  <span style={{fontSize: ".8em"}}>{log.appDetails && allApps ? `${allApps[log.appDetails.appId]?.name}, ${log.appDetails.platform.toUpperCase()}, ${log.appDetails.appVersion}` : ""}</span>
                 </div>
                 <div style={{display:"table-cell"}}>
                   {getLogsEventDescription(log)}
@@ -287,4 +287,3 @@ export default function UserLogsViewer({
     </div>
   )
 }
-

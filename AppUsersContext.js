@@ -26,27 +26,20 @@ export function AppUsersProvider({ children }) {
       endTimestamp: endTimestamp,
     })
     .then((result) => {
-      let logs = result.logs
-      let error = result.error
-      if(error){
+      let logs = result.data?.logs
+      let error = result.data?.error
+      if (error) {
         completion(null, error)
-        
-      }
-      else{
+      } else {
         logs.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp))
         completion(logs,null)
-
       }
       // return to the completion function, which should be called from the UserCards_Logs file
     })
-    .catch((err)=>{
+    .catch((err) => {
       completion(null,err)
     })
   }
-
-
-
-
 
   function retreiveAppUsers(completion) {
     const usersRef = ref(orgDB, 'users')
@@ -198,4 +191,4 @@ export function AppUsersProvider({ children }) {
       {children}
     </AppUsersContext.Provider>
   )
-} 
+}
