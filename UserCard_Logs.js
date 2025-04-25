@@ -76,6 +76,19 @@ export default function UserLogsViewer({
   const [eventType, setEventType] = useState("all")
   const labelFor = key => EVENT_LABELS[key] || key;
 
+  //combine date‐range + eventType filtering
+const filteredLogs = logsNew.filter(item => {
+  const ts = item.timestamp;
+  //date check
+  const inRange = logStartDate
+    ? ts >= logStartDate && ts <= logsEndDate
+    : ts <= logsEndDate;
+  //dropdown check
+  const matchesType = eventType === "all" || item.event === eventType;
+  return inRange && matchesType;
+});
+
+
   function handleEndDateChange(date) {
      if (date < logStartDate) {
        const newStartDate = new Date(date)
