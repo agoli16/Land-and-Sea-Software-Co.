@@ -10,7 +10,55 @@ import { useAuth } from "../../contexts/AuthContext"
 import { useOrganization } from "../../contexts/OrganizationContext"
 import { useAppUsers } from "../../contexts/AppUsersContext"
 
+const EVENT_LABELS = {
+"app.opened": "App - Opened",
+  "app.broughtToForeground": "App - Opened, brought to foreground",
+  "app.sentToBackground": "App - Sent to background",
+  "app.askedToReview": "App - review prompt shown",
+  "app.view.viewed": "App - viewed tab",
 
+  "project.viewed": "Project - Opened",
+  "project.section.clicked": "Project - tapped section",
+  "project.section.viewed": "Project - viewed section",
+  "project.section.bookmark.added": "Project - Bookmark, added",
+  "project.section.bookmark.removed": "Project - Bookmark, removed",
+  "project.bookmarks.viewed": "Project - Bookmark, viewed project bookmark list",
+  "project.bookmarks.section.clicked": "Project - Bookmark, project bookmark list section clicked",
+  "project.section.downloaded": "Project - Downloaded section",
+
+  "file.viewed": "File - viewed file contents",
+  "file.link.clicked": "File - cliked content link",
+
+  "itemSchema.suggestedRecord": "Items - submitted record suggestion",
+  "itemSchema.record.viewed": "Items - viewed item record",
+  "itemSchema.record.comments.viewed": "Items - viewed record comments",
+  "itemSchema.record.comments.added": "Items - added comment",
+  "itemSchema.record.link.clicked": "Items - clicked content link",
+
+  "form.viewed": "Form - Viewed",
+  "form.submit": "Form - Submitted",
+  
+  "app.view.subscribe.attempted": "Subscription Attempt - started",
+  "app.view.subscribe.success": "Subscription Attempt - success",
+  "app.view.subscribe.failed": "Subscription Attempt - failed",
+  "app.view.subscribe.canceled": "Subscription Attempt - canceled",
+
+  "user.registered": "User - registered",
+  "user.login": "User - login",
+  "user.logout": "User - logout",
+  "user.updated": "User - updated profile",
+  "user.forgotPassword": "User - forgot password",
+  "app.view.restoredSubscriptions": "User - restored subscriptions",
+
+  "error.general": "Error",
+
+  "ad.viewed": "Ad - viewed",
+  "ad.clicked": "Ad - clicked",
+  "ad.opened": "Ad - opened",
+
+  "notification.opened": "Notifications - opened",
+  "notification.recievedWhileInForground": "Notifications - recievedWhileInForground"
+};
 export default function UserLogsViewer({
   selectedUser
 }) {
@@ -23,6 +71,10 @@ export default function UserLogsViewer({
   const [selectedLogs, setSelectedLogs] = useState(undefined)
   const [showSelectedLogs, setShowSelectedLogs] = useState(false)
   const [logsNew, setLogsNew] = useState([])
+
+  const [eventTypes, setEventTypes] = useState(["all"])
+  const [eventType, setEventType] = useState("all")
+  const labelFor = key => EVENT_LABELS[key] || key;
 
   function handleEndDateChange(date) {
      if (date < logStartDate) {
@@ -47,6 +99,11 @@ export default function UserLogsViewer({
       });
     }
   }, [selectedUser, logStartDate, logsEndDate, getLogsForUser]);
+
+  useEffect(() => { //use effect to extract event keys 
+    const types = Array.from(new Set(logsNew.map(l => l.event)))
+    setEventTypes(["all", ...types])
+  }, [logsNew]);
 
   
 
@@ -250,6 +307,19 @@ export default function UserLogsViewer({
           />
         </div>
       </div>
+    
+      <div style={{ padding: "8px" }}>
+      <label>
+        Filter by event:&nbsp;
+        <select value={eventType} onChange={e => setEventType(e.target.value)}>
+          {eventTypes.map(t => (
+            <option key={t} value={t}>
+              {labelFor(t)}
+            </option>
+          ))}
+        </select>
+      </label>
+    </div>
 
       <div className="logsBox" style={{border: "1px solid #ccc", height: "500px", overflowY: "scroll"}}>
         {
