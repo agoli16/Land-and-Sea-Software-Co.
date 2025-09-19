@@ -1,0 +1,224 @@
+import React, { useState, useEffect } from "react"
+import { Button, Modal } from "react-bootstrap"
+import DatePicker from "react-datepicker"
+import Moment from "moment"
+
+import { Card } from "../ViewComponents/Card/Card"
+
+import { useApps } from "../../contexts/AppsContext"
+import { useAuth } from "../../contexts/AuthContext"
+import { useOrganization } from "../../contexts/OrganizationContext"
+import { useAppUsers } from "../../contexts/AppUsersContext"
+
+const EVENT_LABELS = {
+  "app.opened": "App - Opened",
+  "app.broughtToForeground": "App - Opened, brought to foreground",
+  "app.sentToBackground": "App - Sent to background",
+  "app.askedToReview": "App - review prompt shown",
+  "app.view.viewed": "App - viewed tab",
+
+  "project.viewed": "Project - Opened",
+  "project.section.clicked": "Project - tapped section",
+  "project.section.viewed": "Project - viewed section",
+  "project.section.bookmark.added": "Project - Bookmark, added",
+  "project.section.bookmark.removed": "Project - Bookmark, removed",
+  "project.bookmarks.viewed": "Project - Bookmark, viewed project bookmark list",
+  "project.bookmarks.section.clicked": "Project - Bookmark, project bookmark list section clicked",
+  "project.section.downloaded": "Project - Downloaded section",
+
+  "file.viewed": "File - viewed file contents",
+  "file.link.clicked": "File - cliked content link",
+
+  "itemSchema.suggestedRecord": "Items - submitted record suggestion",
+  "itemSchema.record.viewed": "Items - viewed item record",
+  "itemSchema.record.comments.viewed": "Items - viewed record comments",
+  "itemSchema.record.comments.added": "Items - added comment",
+  "itemSchema.record.link.clicked": "Items - clicked content link",
+
+  "form.viewed": "Form - Viewed",
+  "form.submit": "Form - Submitted",
+
+  "app.view.subscribe.attempted": "Subscription Attempt - started",
+  "app.view.subscribe.success": "Subscription Attempt - success",
+  "app.view.subscribe.failed": "Subscription Attempt - failed",
+  "app.view.subscribe.canceled": "Subscription Attempt - canceled",
+
+  "user.registered": "User - registered",
+  "user.login": "User - login",
+  "user.logout": "User - logout",
+  "user.updated": "User - updated profile",
+  "user.forgotPassword": "User - forgot password",
+  "app.view.restoredSubscriptions": "User - restored subscriptions",
+
+  "error.general": "Error",
+
+  "ad.viewed": "Ad - viewed",
+  "ad.clicked": "Ad - clicked",
+  "ad.opened": "Ad - opened",
+
+  "notification.opened": "Notifications - opened",
+  "notification.recievedWhileInForground": "Notifications - recievedWhileInForground"
+};
+
+export default function UserLogsViewer({ selectedUser }) {
+  const { currentOrg, orgForms, orgSubscriptions, orgFilesMetadata, orgProjects, itemSchemas, orgAds } = useOrganization()
+  const { allApps } = useApps()
+  const { getLogsForUser } = useAppUsers();
+  const [expandedLogIdx, setExpandedLogIdx] = useState([]);
+
+  const [logStartDate, setLogStartDate] = useState(new Date())
+  const [logsEndDate, setLogsEndDate] = useState(new Date())
+  const [selectedLogs, setSelectedLogs] = useState(undefined)
+  const [showSelectedLogs, setShowSelectedLogs] = useState(false)
+  const [logsNew, setLogsNew] = useState([])
+
+  const [eventTypes, setEventTypes] = useState(["all"])
+  const [eventType, setEventType] = useState("all")
+  const labelFor = key => EVENT_LABELS[key] || key;
+
+  const filteredLogs = logsNew.filter(item => {
+    const ts = item.timestamp;
+    const inRange = logStartDate
+      ? ts >= logStartDate && ts <= logsEndDate
+      : ts <= logsEndDate;
+    const matchesType = eventType === "all" || item.event === eventType;
+    return inRange && matchesType;
+  });
+
+  function handleEndDateChange(date) {
+    if (date < logStartDate) {
+      const newStartDate = new Date(date)
+      newStartDate.setDate(newStartDate.getDate() - 1)
+      setLogStartDate(newStartDate)
+    }
+    setLogsEndDate(date)
+  }
+
+  useEffect(() => {
+    if (selectedUser && logStartDate && logsEndDate) {
+      const startTimestamp = logStartDate.getTime();
+      const endTimestamp = logsEndDate.getTime();
+
+      getLogsForUser(selectedUser.uid, startTimestamp, endTimestamp, (logs, error) => {
+        if (error) {
+          console.error("Error fetching logs: ", error);
+        } else {
+          setLogsNew(logs);
+        }
+      });
+    }
+  }, [selectedUser, logStartDate, logsEndDate, getLogsForUser]);
+
+  useEffect(() => {
+    const filtered = logsNew.filter(item => {
+      const ts = item.timestamp;
+      return ts >= logStartDate.getTime() && ts <= logsEndDate.getTime();
+    });
+
+    const types = Array.from(new Set(filtered.map(log => log.event)));
+    const sorted = types.sort((a, b) => labelFor(a).localeCompare(labelFor(b)));
+
+    setEventTypes(["all", ...sorted]);
+  }, [logsNew, logStartDate, logsEndDate]);
+
+  return (
+    <div className="UserCard_LogsBox">
+   
+      <div style={{
+        background: "#eee", display: "flex", alignItems: "center",
+        justifyItems: "center", padding: "5px"
+      }}>
+        <h5 style={{ flex: "1" }}>Logs</h5>
+        <div style={{ gap: "0", display: "flex", alignItems: "center", textAlign: "center" }}>
+          <DatePicker
+            showTimeInput
+            dateFormat={"MMM d, yyyy hh:mm aa"}
+            selected={logStartDate}
+            className="datePickerFieldStyle"
+            onChange={(date) => setLogStartDate(date)}
+            maxDate={logsEndDate}
+          />
+          <h5> - </h5>
+          <DatePicker
+            showTimeInput
+            dateFormat={"MMM d, yyyy hh:mm aa"}
+            selected={logsEndDate}
+            className="datePickerFieldStyle"
+            onChange={handleEndDateChange}
+            maxDate={new Date()}
+          />
+        </div>
+      </div>
+
+      {selectedLogs && (
+        <div style={{
+          background: "#f9f9f9", border: "1px solid #ccc",
+          padding: "10px", margin: "8px", borderRadius: "8px"
+        }}>
+          <h6 style={{ marginBottom: "6px" }}>Selected Log</h6>
+          <pre style={{ whiteSpace: "pre-wrap" }}>
+            {JSON.stringify(selectedLogs, null, 2)}
+          </pre>
+          <Button
+            variant="outline-secondary"
+            size="sm"
+            onClick={() => setSelectedLogs(null)}
+          >
+            Close
+          </Button>
+        </div>
+      )}
+
+      <div style={{ padding: "8px" }}>
+        <label>
+          Filter by event:&nbsp;
+          <select value={eventType} onChange={e => setEventType(e.target.value)}>
+            {eventTypes.map(t => (
+              <option key={t} value={t}>{labelFor(t)}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="logsBox" style={{ border: "1px solid #ccc", height: "500px", overflowY: "scroll" }}>
+        {filteredLogs.map((log, idx) => (
+          <div
+            key={idx}
+            style={{ padding: "5px", borderBottom: "1px solid #eee" }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <div>
+                <b>{Moment(log.timestamp).format('MMM D YYYY H:mm:ss')}</b><br />
+                <span style={{ fontSize: ".8em" }}>{labelFor(log.event)}</span>
+              </div>
+              <Button
+                variant="text"
+                style={{ color: "blue", fontWeight: "bold" }}
+                size="sm"
+                onClick={() =>
+                  setExpandedLogIdx(prev => prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev,idx])
+                }
+              >
+                {expandedLogIdx.includes(idx) ? "Hide Log" : "View Log"}
+              </Button>
+            </div>
+
+            {expandedLogIdx.includes(idx) && (
+              <div style={{
+                marginTop: "5px",
+                background: "#f9f9f9",
+                padding: "10px",
+                borderRadius: "6px",
+                fontSize: "0.85em",
+                whiteSpace: "pre-wrap"
+              }}>
+                {JSON.stringify(log, null, 2)}
+              </div>
+            )}
+          </div>
+        ))}
+
+      </div>
+    </div>
+  );
+}
