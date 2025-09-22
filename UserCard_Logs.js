@@ -1,64 +1,82 @@
 import React, { useState, useEffect } from "react"
-import { Button, Form, Modal } from "react-bootstrap"
+import { Button, Modal } from "react-bootstrap"
 import DatePicker from "react-datepicker"
 import Moment from 'moment'
 
-import { Card } from "../ViewComponents/Card/Card"
-
 import { useApps } from "../../contexts/AppsContext"
-import { useAuth } from "../../contexts/AuthContext"
 import { useOrganization } from "../../contexts/OrganizationContext"
 import { useAppUsers } from "../../contexts/AppUsersContext"
 
-const EVENT_LABELS = {
-"app.opened": "App - Opened",
-  "app.broughtToForeground": "App - Opened, brought to foreground",
-  "app.sentToBackground": "App - Sent to background",
-  "app.askedToReview": "App - review prompt shown",
-  "app.view.viewed": "App - viewed tab",
-
-  "project.viewed": "Project - Opened",
-  "project.section.clicked": "Project - tapped section",
-  "project.section.viewed": "Project - viewed section",
-  "project.section.bookmark.added": "Project - Bookmark, added",
-  "project.section.bookmark.removed": "Project - Bookmark, removed",
-  "project.bookmarks.viewed": "Project - Bookmark, viewed project bookmark list",
-  "project.bookmarks.section.clicked": "Project - Bookmark, project bookmark list section clicked",
-  "project.section.downloaded": "Project - Downloaded section",
-
-  "file.viewed": "File - viewed file contents",
-  "file.link.clicked": "File - cliked content link",
-
-  "itemSchema.suggestedRecord": "Items - submitted record suggestion",
-  "itemSchema.record.viewed": "Items - viewed item record",
-  "itemSchema.record.comments.viewed": "Items - viewed record comments",
-  "itemSchema.record.comments.added": "Items - added comment",
-  "itemSchema.record.link.clicked": "Items - clicked content link",
-
-  "form.viewed": "Form - Viewed",
-  "form.submit": "Form - Submitted",
+// Function to get human-readable label for any event
+function getEventLabel(rawEvent) {
+  // App events
+  if (rawEvent === 'app.opened') return 'App - Opened';
+  if (rawEvent === 'app.broughtToForeground') return 'App - Brought to foreground';
+  if (rawEvent === 'app.sentToBackground') return 'App - Sent to background';
+  if (rawEvent === 'app.askedToReview') return 'App - Review prompt shown';
+  if (rawEvent.match(/^app\.view\[.*?\]\.viewed$/)) return 'App - View tab viewed';
   
-  "app.view.subscribe.attempted": "Subscription Attempt - started",
-  "app.view.subscribe.success": "Subscription Attempt - success",
-  "app.view.subscribe.failed": "Subscription Attempt - failed",
-  "app.view.subscribe.canceled": "Subscription Attempt - canceled",
-
-  "user.registered": "User - registered",
-  "user.login": "User - login",
-  "user.logout": "User - logout",
-  "user.updated": "User - updated profile",
-  "user.forgotPassword": "User - forgot password",
-  "app.view.restoredSubscriptions": "User - restored subscriptions",
-
-  "error.general": "Error",
-
-  "ad.viewed": "Ad - viewed",
-  "ad.clicked": "Ad - clicked",
-  "ad.opened": "Ad - opened",
-
-  "notification.opened": "Notifications - opened",
-  "notification.recievedWhileInForground": "Notifications - recievedWhileInForground"
-};
+  // App view specific events
+  if (rawEvent.match(/^app\.view\["?library"?\]\.viewed$/)) return 'App - Library viewed';
+  if (rawEvent.match(/^app\.view\["?library"?\]\.category\[.*?\]\.viewed$/)) return 'App - Library category viewed';
+  if (rawEvent.match(/^app\.view\["?subscribe"?\]\.viewed$/)) return 'App - Subscribe view shown';
+  if (rawEvent.match(/^app\.view\["?subscribe"?\]\.subscribe\[.*?\]\.attempted$/)) return 'Subscribe - Attempt started';
+  if (rawEvent.match(/^app\.view\["?subscribe"?\]\.subscribe\[.*?\]\.success$/)) return 'Subscribe - Success';
+  if (rawEvent.match(/^app\.view\["?subscribe"?\]\.subscribe\[.*?\]\.failed$/)) return 'Subscribe - Failed';
+  if (rawEvent.match(/^app\.view\["?subscribe"?\]\.subscribe\[.*?\]\.canceled$/)) return 'Subscribe - Canceled';
+  if (rawEvent.match(/^app\.view\["?subscribe"?\]\.restoredSubscriptions$/)) return 'Subscribe - Restored subscriptions';
+  if (rawEvent.match(/^app\.view\["?login"?\]\.viewed$/)) return 'App - Login view shown';
+  if (rawEvent.match(/^app\.view\["?account"?\]\.viewed$/)) return 'App - Account view shown';
+  if (rawEvent.match(/^app\.view\["?account"?\]\.restoredSubscriptions$/)) return 'Account - Restored subscriptions';
+  if (rawEvent.match(/^app\.view\["?accountEdit"?\]\.viewed$/)) return 'App - Account edit view shown';
+  
+  // Project events
+  if (rawEvent.match(/^project\[.*?\]\.viewed$/)) return 'Project - Opened';
+  if (rawEvent.match(/^project\[.*?\]\.section\[.*?\]\.clicked$/)) return 'Project - Section clicked';
+  if (rawEvent.match(/^project\[.*?\]\.section\[.*?\]\.viewed$/)) return 'Project - Section viewed';
+  if (rawEvent.match(/^project\[.*?\]\.section\[.*?\]\.bookmark\.added$/)) return 'Project - Bookmark added';
+  if (rawEvent.match(/^project\[.*?\]\.section\[.*?\]\.bookmark\.removed$/)) return 'Project - Bookmark removed';
+  if (rawEvent.match(/^project\[.*?\]\.bookmarks\.viewed$/)) return 'Project - Bookmarks viewed';
+  if (rawEvent.match(/^project\[.*?\]\.bookmarks\.section\[.*?\]\.clicked$/)) return 'Project - Bookmark section clicked';
+  if (rawEvent.match(/^project\[.*?\]\.section\[.*?\]\.downloaded$/)) return 'Project - Section downloaded';
+  
+  // File events  
+  if (rawEvent.match(/^file\[.*?\]\.viewed$/)) return 'File - Viewed';
+  if (rawEvent.match(/^file\[.*?\]\.link\[.*?\]\.clicked$/)) return 'File - Link clicked';
+  
+  // Item schema events
+  if (rawEvent.match(/^itemSchema\[.*?\]\.suggestedRecord$/)) return 'Item - Record suggested';
+  if (rawEvent.match(/^itemSchema\[.*?\]\.record\[.*?\]\.viewed$/)) return 'Item - Record viewed';
+  if (rawEvent.match(/^itemSchema\[.*?\]\.record\[.*?\]\.comments\.viewed$/)) return 'Item - Comments viewed';
+  if (rawEvent.match(/^itemSchema\[.*?\]\.record\[.*?\]\.comments\.added$/)) return 'Item - Comment added';
+  if (rawEvent.match(/^itemSchema\[.*?\]\.record\[.*?\]\.link\[.*?\]\.clicked$/)) return 'Item - Link clicked';
+  
+  // Form events
+  if (rawEvent.match(/^form\[.*?\]\.viewed$/)) return 'Form - Viewed';
+  if (rawEvent.match(/^form\[.*?\]\.submit$/)) return 'Form - Submitted';
+  
+  // User events
+  if (rawEvent === 'user.registered') return 'User - Registered';
+  if (rawEvent === 'user.login') return 'User - Login';
+  if (rawEvent === 'user.logout') return 'User - Logout';
+  if (rawEvent === 'user.updated') return 'User - Profile updated';
+  if (rawEvent === 'user.forgotPassword') return 'User - Forgot password';
+  
+  // Error events
+  if (rawEvent === 'error.general') return 'Error - General';
+  
+  // Ad events
+  if (rawEvent.match(/^ad\[.*?\]\.viewed$/)) return 'Ad - Viewed';
+  if (rawEvent.match(/^ad\[.*?\]\.clicked$/)) return 'Ad - Clicked';
+  if (rawEvent.match(/^ad\[.*?\]\.opened$/)) return 'Ad - Opened';
+  
+  // Notification events
+  if (rawEvent.match(/^notification\[.*?\]\.opened$/)) return 'Notification - Opened';
+  if (rawEvent.match(/^notification\[.*?\]\.recievedWhileInForground$/)) return 'Notification - Received while in foreground';
+  
+  // Return the raw event if no match found
+  return rawEvent;
+}
 export default function UserLogsViewer({
   selectedUser
 }) {
@@ -73,8 +91,79 @@ export default function UserLogsViewer({
   const [logsNew, setLogsNew] = useState([])
 
   const [eventTypes, setEventTypes] = useState(["all"])
-  const [eventType, setEventType] = useState("all")
-  const labelFor = key => EVENT_LABELS[key] || key;
+  const [selectedEventTypes, setSelectedEventTypes] = useState(["all"])
+  const labelFor = key => getEventLabel(key);
+
+  // Function to normalize raw events to your approved event types
+  function normalizeEventType(rawEvent) {
+    // App events
+    if (rawEvent === 'app.opened') return 'app.opened';
+    if (rawEvent === 'app.broughtToForeground') return 'app.broughtToForeground';  
+    if (rawEvent === 'app.sentToBackground') return 'app.sentToBackground';
+    if (rawEvent === 'app.askedToReview') return 'app.askedToReview';
+    if (rawEvent.match(/^app\.view\[.*?\]\.viewed$/)) return 'app.view.viewed';
+    
+    // App view specific events
+    if (rawEvent.match(/^app\.view\["?library"?\]\.viewed$/)) return 'app.view.library.viewed';
+    if (rawEvent.match(/^app\.view\["?library"?\]\.category\[.*?\]\.viewed$/)) return 'app.view.library.category.viewed';
+    if (rawEvent.match(/^app\.view\["?subscribe"?\]\.viewed$/)) return 'app.view.subscribe.viewed';
+    if (rawEvent.match(/^app\.view\["?subscribe"?\]\.subscribe\[.*?\]\.attempted$/)) return 'app.view.subscribe.subscribe.attempted';
+    if (rawEvent.match(/^app\.view\["?subscribe"?\]\.subscribe\[.*?\]\.success$/)) return 'app.view.subscribe.subscribe.success';
+    if (rawEvent.match(/^app\.view\["?subscribe"?\]\.subscribe\[.*?\]\.failed$/)) return 'app.view.subscribe.subscribe.failed';
+    if (rawEvent.match(/^app\.view\["?subscribe"?\]\.subscribe\[.*?\]\.canceled$/)) return 'app.view.subscribe.subscribe.canceled';
+    if (rawEvent.match(/^app\.view\["?subscribe"?\]\.restoredSubscriptions$/)) return 'app.view.subscribe.restoredSubscriptions';
+    if (rawEvent.match(/^app\.view\["?login"?\]\.viewed$/)) return 'app.view.login.viewed';
+    if (rawEvent.match(/^app\.view\["?account"?\]\.viewed$/)) return 'app.view.account.viewed';
+    if (rawEvent.match(/^app\.view\["?account"?\]\.restoredSubscriptions$/)) return 'app.view.account.restoredSubscriptions';
+    if (rawEvent.match(/^app\.view\["?accountEdit"?\]\.viewed$/)) return 'app.view.accountEdit.viewed';
+    
+    // Project events
+    if (rawEvent.match(/^project\[.*?\]\.viewed$/)) return 'project.viewed';
+    if (rawEvent.match(/^project\[.*?\]\.section\[.*?\]\.clicked$/)) return 'project.section.clicked';
+    if (rawEvent.match(/^project\[.*?\]\.section\[.*?\]\.viewed$/)) return 'project.section.viewed';
+    if (rawEvent.match(/^project\[.*?\]\.section\[.*?\]\.bookmark\.added$/)) return 'project.section.bookmark.added';
+    if (rawEvent.match(/^project\[.*?\]\.section\[.*?\]\.bookmark\.removed$/)) return 'project.section.bookmark.removed';
+    if (rawEvent.match(/^project\[.*?\]\.bookmarks\.viewed$/)) return 'project.bookmarks.viewed';
+    if (rawEvent.match(/^project\[.*?\]\.bookmarks\.section\[.*?\]\.clicked$/)) return 'project.bookmarks.section.clicked';
+    if (rawEvent.match(/^project\[.*?\]\.section\[.*?\]\.downloaded$/)) return 'project.section.downloaded';
+    
+    // File events  
+    if (rawEvent.match(/^file\[.*?\]\.viewed$/)) return 'file.viewed';
+    if (rawEvent.match(/^file\[.*?\]\.link\[.*?\]\.clicked$/)) return 'file.link.clicked';
+    
+    // Item schema events
+    if (rawEvent.match(/^itemSchema\[.*?\]\.suggestedRecord$/)) return 'itemSchema.suggestedRecord';
+    if (rawEvent.match(/^itemSchema\[.*?\]\.record\[.*?\]\.viewed$/)) return 'itemSchema.record.viewed';
+    if (rawEvent.match(/^itemSchema\[.*?\]\.record\[.*?\]\.comments\.viewed$/)) return 'itemSchema.record.comments.viewed';
+    if (rawEvent.match(/^itemSchema\[.*?\]\.record\[.*?\]\.comments\.added$/)) return 'itemSchema.record.comments.added';
+    if (rawEvent.match(/^itemSchema\[.*?\]\.record\[.*?\]\.link\[.*?\]\.clicked$/)) return 'itemSchema.record.link.clicked';
+    
+    // Form events
+    if (rawEvent.match(/^form\[.*?\]\.viewed$/)) return 'form.viewed';
+    if (rawEvent.match(/^form\[.*?\]\.submit$/)) return 'form.submit';
+    
+    // User events
+    if (rawEvent === 'user.registered') return 'user.registered';
+    if (rawEvent === 'user.login') return 'user.login';
+    if (rawEvent === 'user.logout') return 'user.logout';
+    if (rawEvent === 'user.updated') return 'user.updated';
+    if (rawEvent === 'user.forgotPassword') return 'user.forgotPassword';
+    
+    // Error events
+    if (rawEvent === 'error.general') return 'error.general';
+    
+    // Ad events
+    if (rawEvent.match(/^ad\[.*?\]\.viewed$/)) return 'ad.viewed';
+    if (rawEvent.match(/^ad\[.*?\]\.clicked$/)) return 'ad.clicked';
+    if (rawEvent.match(/^ad\[.*?\]\.opened$/)) return 'ad.opened';
+    
+    // Notification events
+    if (rawEvent.match(/^notification\[.*?\]\.opened$/)) return 'notification.opened';
+    if (rawEvent.match(/^notification\[.*?\]\.recievedWhileInForground$/)) return 'notification.recievedWhileInForground';
+    
+    // If no match found, return null to filter it out
+    return null;
+  }
 
   //combine date‐range + eventType filtering
 const filteredLogs = logsNew.filter(item => {
@@ -83,8 +172,15 @@ const filteredLogs = logsNew.filter(item => {
   const inRange = logStartDate
     ? ts >= logStartDate && ts <= logsEndDate
     : ts <= logsEndDate;
-  //dropdown check
-  const matchesType = eventType === "all" || item.event === eventType;
+  
+  // Only show approved events and match by normalized type
+  const normalizedEvent = normalizeEventType(item.event);
+  const matchesType = selectedEventTypes.length === 0
+    ? false  // Show nothing if no types selected
+    : selectedEventTypes.includes("all") 
+    ? normalizedEvent !== null  // Only show approved events when "all" is selected
+    : selectedEventTypes.includes(normalizedEvent); // Match normalized type when specific types selected
+  
   return inRange && matchesType;
 });
 
@@ -99,30 +195,57 @@ const filteredLogs = logsNew.filter(item => {
    }
    //useEffect to fetch logs when selectedUser or date range changes
    useEffect(() => {
-    if (selectedUser && logStartDate && logsEndDate) {
-      const startTimestamp = logStartDate.getTime();
+    if (selectedUser && logsEndDate) {
+      const startTimestamp = logStartDate ? logStartDate.getTime() : 0; // If no start date, use epoch
       const endTimestamp = logsEndDate.getTime();
 
       getLogsForUser(selectedUser.uid, startTimestamp, endTimestamp, (logs, error) => {
         if (error) {
           console.error("Error fetching logs: ", error);
+          setLogsNew([]); // Set empty array on error
         } else {
-          setLogsNew(logs);
+          setLogsNew(logs || []); // Ensure logs is always an array
         }
       });
     }
   }, [selectedUser, logStartDate, logsEndDate, getLogsForUser]);
 
   useEffect(() => { //use effect to extract event keys 
-    const types = Array.from(new Set(logsNew.map(l => l.event)))
-    setEventTypes(["all", ...types])
+    // Group by normalized type but show human-readable labels
+    const eventTypeMap = new Map();
+    
+    logsNew.forEach(log => {
+      const normalizedType = normalizeEventType(log.event);
+      if (normalizedType !== null) {
+        const label = getEventLabel(log.event);
+        // Use normalized type as key to group similar events together
+        if (!eventTypeMap.has(normalizedType)) {
+          eventTypeMap.set(normalizedType, {
+            label: label,
+            rawEvents: new Set()
+          });
+        }
+        eventTypeMap.get(normalizedType).rawEvents.add(log.event);
+      }
+    });
+    
+    // Convert to array and sort by label
+    const eventOptions = Array.from(eventTypeMap.entries())
+      .map(([normalizedType, data]) => ({
+        value: normalizedType,
+        label: data.label,
+        rawEvents: Array.from(data.rawEvents)
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+    
+    setEventTypes(["all", ...eventOptions.map(opt => opt.value)]);
   }, [logsNew]);
 
   
 
   function getLogsEventDescription(log) {
     const event = log.event
-    let eventParts = event.match(/^(user|file|project|itemSchema|app|form|function|error|ad)\b/)
+    let eventParts = event.match(/^(user|file|project|itemSchema|app|form|function|error|ad|notification)\b/)
     let eventType = eventParts ? eventParts[0] : "unknown"
 
     switch (eventType) {
@@ -221,7 +344,7 @@ const filteredLogs = logsNew.filter(item => {
 
           const appId = log.appDetails.appId
 
-          const appTab = allApps[appId].tabs.find(t => t.id === log.viewId)
+          const appTab = allApps?.[appId]?.tabs?.find(t => t.id === log.viewId)
 
           const eventDataObject = {
             library_viewed: "app library viewed",
@@ -286,6 +409,16 @@ const filteredLogs = logsNew.filter(item => {
           )
         }
       }
+      case "notification": {
+        const regex = /^notification\[(.*?)\]\.?(opened|recievedWhileInForground|(.*?))$/
+        const [, notificationId, action] = event.match(regex)
+        
+        return (
+          <div style={{ display: "flex", gap: "5px" }}>
+            <h6>notification {action}: {notificationId}</h6>
+          </div>
+        )
+      }
       case "unknown":
       default: {
         console.log("unknown log:", event)
@@ -322,24 +455,65 @@ const filteredLogs = logsNew.filter(item => {
       </div>
     
       <div style={{ padding: "8px" }}>
-      <label>
-        Filter by event:&nbsp;
-        <select value={eventType} onChange={e => setEventType(e.target.value)}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+          <span style={{ fontWeight: "bold" }}>Filter by event types:</span>
+          <div>
+            <button 
+              type="button" 
+              onClick={() => setSelectedEventTypes(["all"])}
+              style={{ marginRight: "8px", padding: "2px 8px", fontSize: "12px", cursor: "pointer" }}
+            >
+              Select All
+            </button>
+            <button 
+              type="button" 
+              onClick={() => setSelectedEventTypes([])}
+              style={{ padding: "2px 8px", fontSize: "12px", cursor: "pointer" }}
+            >
+              Clear All
+            </button>
+          </div>
+        </div>
+        <div style={{ maxHeight: "200px", overflowY: "auto", border: "1px solid #ccc", padding: "8px", borderRadius: "4px" }}>
           {eventTypes.map(t => (
-            <option key={t} value={t}>
-              {labelFor(t)}
-            </option>
+            <div key={t} style={{ marginBottom: "4px" }}>
+              <label style={{ display: "flex", alignItems: "center", cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={selectedEventTypes.includes(t)}
+                  onChange={(e) => {
+                    if (t === "all") {
+                      // If "all" is clicked, either select all or deselect all
+                      if (e.target.checked) {
+                        setSelectedEventTypes(["all"]);
+                      } else {
+                        setSelectedEventTypes([]);
+                      }
+                    } else {
+                      // If a specific type is clicked
+                      const newSelected = [...selectedEventTypes];
+                      if (e.target.checked) {
+                        // Remove "all" if present and add this type
+                        const filtered = newSelected.filter(type => type !== "all");
+                        setSelectedEventTypes([...filtered, t]);
+                      } else {
+                        // Remove this type
+                        setSelectedEventTypes(newSelected.filter(type => type !== t));
+                      }
+                    }
+                  }}
+                  style={{ marginRight: "8px" }}
+                />
+                <span style={{ fontSize: "14px" }}>{labelFor(t)}</span>
+              </label>
+            </div>
           ))}
-        </select>
-      </label>
-    </div>
+        </div>
+      </div>
 
       <div className="logsBox" style={{border: "1px solid #ccc", height: "500px", overflowY: "scroll"}}>
         {
-          logsNew.filter(item => {
-            const timestamp = item.timestamp
-            return logStartDate ? timestamp >= logStartDate && timestamp <= logsEndDate : timestamp <= logsEndDate
-          }).map((log, idx)=>{
+          filteredLogs.map((log, idx)=>{
             return (
               <div style={{padding: "5px", borderBottom: "1px solid #eee",display:"flex"}} key={idx}>
                 <div style={{width: "220px", paddingRight: "20px", display:"table-cell"}}>
@@ -367,6 +541,22 @@ const filteredLogs = logsNew.filter(item => {
           })
         }
       </div>
+
+      <Modal show={showSelectedLogs} onHide={() => setShowSelectedLogs(false)} size="lg">
+        <Modal.Header closeButton>
+          <Modal.Title>Log Details</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <pre style={{fontSize: "12px", whiteSpace: "pre-wrap", maxHeight: "400px", overflow: "auto"}}>
+            {selectedLogs ? JSON.stringify(selectedLogs, null, 2) : ""}
+          </pre>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowSelectedLogs(false)}>
+            Close
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </div>
   )
 }
