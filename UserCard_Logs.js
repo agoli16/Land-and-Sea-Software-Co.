@@ -86,13 +86,98 @@ export default function UserLogsViewer({
 
   const [logStartDate, setLogStartDate] = useState(undefined)
   const [logsEndDate, setLogsEndDate] = useState(new Date())
-  const [selectedLogs, setSelectedLogs] = useState(undefined)
-  const [showSelectedLogs, setShowSelectedLogs] = useState(false)
+  const [expandedLogs, setExpandedLogs] = useState(new Set())
   const [logsNew, setLogsNew] = useState([])
 
   const [eventTypes, setEventTypes] = useState(["all"])
   const [selectedEventTypes, setSelectedEventTypes] = useState(["all"])
+  const [searchQuery, setSearchQuery] = useState("")
   const labelFor = key => getEventLabel(key);
+
+  // Function to get searchable content from a log entry
+  function getSearchableContent(log) {
+    const searchableFields = [];
+    
+    // Add the raw event string
+    searchableFields.push(log.event);
+    
+    // Add any other log fields that might be searchable
+    if (log.key) searchableFields.push(log.key);
+    if (log.appDetails) {
+      if (log.appDetails.appId) searchableFields.push(log.appDetails.appId);
+      if (log.appDetails.appVersion) searchableFields.push(log.appDetails.appVersion);
+      if (log.appDetails.platform) searchableFields.push(log.appDetails.platform);
+    }
+    
+    // Extract and add ancillary info based on event type
+    const event = log.event;
+    const eventParts = event.match(/^(user|file|project|itemSchema|app|form|function|error|ad|notification)\b/);
+    const eventType = eventParts ? eventParts[0] : "unknown";
+    
+    switch (eventType) {
+      case "file": {
+        const fileMatch = event.match(/^file\[(.*?)\]/);
+        if (fileMatch) {
+          const fileId = fileMatch[1];
+          searchableFields.push(fileId);
+          const fileName = orgFilesMetadata[fileId]?.title;
+          if (fileName) searchableFields.push(fileName);
+        }
+        break;
+      }
+      case "project": {
+        const projectMatch = event.match(/^project\[(.*?)\]/);
+        if (projectMatch) {
+          const projectId = projectMatch[1];
+          searchableFields.push(projectId);
+          const projectName = orgProjects[projectId]?.title;
+          if (projectName) searchableFields.push(projectName);
+        }
+        break;
+      }
+      case "itemSchema": {
+        const schemaMatch = event.match(/^itemSchema\[(.*?)\]/);
+        if (schemaMatch) {
+          const schemaId = schemaMatch[1];
+          searchableFields.push(schemaId);
+        }
+        break;
+      }
+      case "app": {
+        if (event.includes("view[") && allApps) {
+          const viewMatch = event.match(/view\[(.*?)\]/);
+          if (viewMatch) {
+            const viewId = viewMatch[1];
+            searchableFields.push(viewId);
+            // Find app that contains this view
+            for (const [appId, app] of Object.entries(allApps)) {
+              const appTab = app?.tabs?.find(t => t.id === viewId);
+              if (appTab) {
+                searchableFields.push(appId);
+                searchableFields.push(app.name);
+                searchableFields.push(appTab.title);
+                break;
+              }
+            }
+          }
+        }
+        break;
+      }
+    }
+    
+    // Add any subscription, notification, or other IDs from the event string
+    const idMatches = event.match(/\[(.*?)\]/g);
+    if (idMatches) {
+      idMatches.forEach(match => {
+        const id = match.replace(/[[\]]/g, '');
+        if (id && !searchableFields.includes(id)) {
+          searchableFields.push(id);
+        }
+      });
+    }
+    
+    return searchableFields.join(' ').toLowerCase();
+  }
 
   // Function to normalize raw events to your approved event types
   function normalizeEventType(rawEvent) {
@@ -165,7 +250,7 @@ export default function UserLogsViewer({
     return null;
   }
 
-  //combine date‐range + eventType filtering
+  //combine date‐range + eventType + search filtering
 const filteredLogs = logsNew.filter(item => {
   const ts = item.timestamp;
   //date check
@@ -181,7 +266,11 @@ const filteredLogs = logsNew.filter(item => {
     ? normalizedEvent !== null  // Only show approved events when "all" is selected
     : selectedEventTypes.includes(normalizedEvent); // Match normalized type when specific types selected
   
-  return inRange && matchesType;
+  // Search functionality
+  const matchesSearch = !searchQuery.trim() || 
+    getSearchableContent(item).includes(searchQuery.toLowerCase().trim());
+  
+  return inRange && matchesType && matchesSearch;
 });
 
 
@@ -455,6 +544,31 @@ const filteredLogs = logsNew.filter(item => {
       </div>
     
       <div style={{ padding: "8px" }}>
+        <div style={{ marginBottom: "16px" }}>
+          <label style={{ display: "block", marginBottom: "4px", fontWeight: "bold" }} htmlFor="search-logs">
+            Search logs:
+          </label>
+          <input
+            id="search-logs"
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search by project name, file name, ID, event type, etc..."
+            style={{ 
+              width: "100%", 
+              padding: "8px", 
+              borderRadius: "4px", 
+              border: "1px solid #ccc",
+              fontSize: "14px"
+            }}
+          />
+          {searchQuery && (
+            <div style={{ fontSize: "12px", color: "#666", marginTop: "4px" }}>
+              {filteredLogs.length} log{filteredLogs.length !== 1 ? 's' : ''} found
+            </div>
+          )}
+        </div>
+        
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
           <span style={{ fontWeight: "bold" }}>Filter by event types:</span>
           <div>
@@ -514,49 +628,54 @@ const filteredLogs = logsNew.filter(item => {
       <div className="logsBox" style={{border: "1px solid #ccc", height: "500px", overflowY: "scroll"}}>
         {
           filteredLogs.map((log, idx)=>{
+            const isExpanded = expandedLogs.has(idx);
+            const toggleExpand = () => {
+              const newExpanded = new Set(expandedLogs);
+              if (isExpanded) {
+                newExpanded.delete(idx);
+              } else {
+                newExpanded.add(idx);
+              }
+              setExpandedLogs(newExpanded);
+            };
+
             return (
-              <div style={{padding: "5px", borderBottom: "1px solid #eee",display:"flex"}} key={idx}>
-                <div style={{width: "220px", paddingRight: "20px", display:"table-cell"}}>
-                  <b>{Moment(parseInt(log.timestamp)).format('MMM D YYYY H:mm:ss')}</b><br />
-                  <span style={{fontSize: ".8em"}}>{log.appDetails && allApps ? `${allApps[log.appDetails.appId]?.name}, ${log.appDetails.platform.toUpperCase()}, ${log.appDetails.appVersion}` : ""}</span>
-                </div>
-                <div style={{display:"table-cell"}}>
-                  {getLogsEventDescription(log)}
-                  <span style={{fontSize: ".8em"}}>{log.key}</span>
+              <div style={{borderBottom: "1px solid #eee"}} key={idx}>
+                <div style={{padding: "5px", display:"flex", cursor: "pointer", backgroundColor: isExpanded ? "#f0f8ff" : "transparent"}} onClick={toggleExpand}>
+                  <div style={{width: "220px", paddingRight: "20px", display:"table-cell"}}>
+                    <b>{Moment(parseInt(log.timestamp)).format('MMM D YYYY H:mm:ss')}</b><br />
+                    <span style={{fontSize: ".8em"}}>{log.appDetails && allApps ? `${allApps[log.appDetails.appId]?.name}, ${log.appDetails.platform.toUpperCase()}, ${log.appDetails.appVersion}` : ""}</span>
+                  </div>
+                  <div style={{display:"table-cell", flex: 1}}>
+                    {getLogsEventDescription(log)}
+                    <span style={{fontSize: ".8em"}}>{log.key}</span>
+                  </div>
+
+                  <div style={{display:"table-cell", textAlign:"end", marginRight:"10px", width: "100px"}}>
+                    <span style={{color:"blue", fontWeight:"bold", fontSize: "14px"}}>
+                      {isExpanded ? "▼ Hide" : "▶ View Log"}
+                    </span>
+                  </div>
                 </div>
 
-                <div style={{display:"table-cell",flex:"1",textAlign:"end",marginRight:"10px"}}>
-                  <Button
-                    variant="text"
-                    style={{color:"blue",fontWeight:"bold"}}
-                    size="sm"
-                    onClick={() => {
-                      setSelectedLogs(log)
-                      setShowSelectedLogs(true)
-                    }}
-                  >View Log</Button>
+                <div style={{
+                  maxHeight: isExpanded ? "500px" : "0px",
+                  overflow: "hidden",
+                  transition: "max-height 0.3s ease-in-out",
+                  backgroundColor: "#f9f9f9",
+                  borderTop: isExpanded ? "1px solid #ddd" : "none"
+                }}>
+                  <div style={{padding: "10px"}}>
+                    <pre style={{fontSize: "12px", whiteSpace: "pre-wrap", maxHeight: "400px", overflow: "auto", margin: 0, backgroundColor: "white", padding: "10px", border: "1px solid #ccc", borderRadius: "4px"}}>
+                      {JSON.stringify(log, null, 2)}
+                    </pre>
+                  </div>
                 </div>
               </div>
             )
           })
         }
       </div>
-
-      <Modal show={showSelectedLogs} onHide={() => setShowSelectedLogs(false)} size="lg">
-        <Modal.Header closeButton>
-          <Modal.Title>Log Details</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <pre style={{fontSize: "12px", whiteSpace: "pre-wrap", maxHeight: "400px", overflow: "auto"}}>
-            {selectedLogs ? JSON.stringify(selectedLogs, null, 2) : ""}
-          </pre>
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowSelectedLogs(false)}>
-            Close
-          </Button>
-        </Modal.Footer>
-      </Modal>
     </div>
   )
 }
