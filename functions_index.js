@@ -168,20 +168,45 @@ async function fetch30DayAnalytics(eventFilters = ['app.opened', 'app.broughtToF
     Object.entries(usersByPlatform).map(([platform, usersSet]) => [platform, usersSet.size])
   );
 
-  // Calculate daily unique users
+  // Calculate daily unique users (total and by platform)
   const usersByDate = {};
+  const usersByDateAndPlatform = {};
+
   logss.forEach(log => {
     const date = new Date(log.timestamp);
     const dateKey = date.toISOString().split('T')[0]; // YYYY-MM-DD format
+    const platform = log.appDetails?.platform;
+
+    // Total daily users
     if (!usersByDate[dateKey]) {
       usersByDate[dateKey] = new Set();
     }
     usersByDate[dateKey].add(log.uid);
+
+    // Daily users by platform
+    if (platform) {
+      if (!usersByDateAndPlatform[dateKey]) {
+        usersByDateAndPlatform[dateKey] = {};
+      }
+      if (!usersByDateAndPlatform[dateKey][platform]) {
+        usersByDateAndPlatform[dateKey][platform] = new Set();
+      }
+      usersByDateAndPlatform[dateKey][platform].add(log.uid);
+    }
   });
 
   const dailyUniqueCounts = Object.fromEntries(
     Object.entries(usersByDate).map(([date, userSet]) => [date, userSet.size])
   );
+
+  // Convert platform data to counts
+  const dailyPlatformCounts = {};
+  Object.entries(usersByDateAndPlatform).forEach(([date, platforms]) => {
+    dailyPlatformCounts[date] = {};
+    Object.entries(platforms).forEach(([platform, userSet]) => {
+      dailyPlatformCounts[date][platform] = userSet.size;
+    });
+  });
 
   // Calculate version distribution (latest version per user)
   const userLatestVersions = {};
@@ -205,6 +230,56 @@ async function fetch30DayAnalytics(eventFilters = ['app.opened', 'app.broughtToF
     }
   });
 
+  // Now fetch app.view[viewId].viewed events from monthly collections
+  console.log("Fetching view events from monthly tracking collections...");
+
+  let viewLogs = [];
+
+  // Get monthly buckets for the same 30-day period
+  const viewBuckets = getBucketsInRange(startTimestamp, endTimestamp);
+  console.log("View query buckets:", viewBuckets);
+
+  // Query all monthly buckets in parallel for view events
+  const viewQueries = viewBuckets.map(month => {
+    console.log(`Querying collection tracking_month__${month} for view events`);
+    return firestore.collection(`tracking_month__${month}`)
+      .where('timestamp', '>=', parseInt(startTimestamp))
+      .where('timestamp', '<=', parseInt(endTimestamp))
+      .get()
+      .then(snapshot => {
+        const monthViewLogs = [];
+        snapshot.forEach((doc) => {
+          const docData = doc.data();
+          // Check if event matches pattern app.view[viewId].viewed
+          if (docData.event && docData.event.includes('app.view[') && docData.event.includes('].viewed')) {
+            monthViewLogs.push(docData);
+          }
+        });
+        return monthViewLogs;
+      })
+      .catch(err => {
+        console.log(`Collection tracking_month__${month} might not exist or error:`, err.message);
+        return [];
+      });
+  });
+
+  // Wait for all view queries to complete
+  const viewResults = await Promise.all(viewQueries);
+  viewLogs = viewResults.flat();
+
+  console.log(`Found ${viewLogs.length} matching view events in last 30 days`);
+
+  // Extract viewIds and count occurrences
+  const viewCounts = {};
+  viewLogs.forEach(log => {
+    // Extract viewId from event string like "app.view[viewId123].viewed"
+    const match = log.event.match(/app\.view\[([^\]]+)\]\.viewed/);
+    if (match && match[1]) {
+      const viewId = match[1];
+      viewCounts[viewId] = (viewCounts[viewId] || 0) + 1;
+    }
+  });
+
   const analyticsData = {
     dateRange: {
       start: new Date(startTimestamp).toISOString(),
@@ -212,8 +287,10 @@ async function fetch30DayAnalytics(eventFilters = ['app.opened', 'app.broughtToF
     },
     totalUniqueUsers: uniqueUsers.size,
     dailyUniqueUsers: dailyUniqueCounts,
+    dailyPlatformUsers: dailyPlatformCounts,
     platformDistribution: platformUserCounts,
     versionDistribution: versionCounts,
+    viewDistribution: viewCounts,
     lastUpdated: new Date().toISOString()
   };
 
@@ -222,7 +299,6 @@ async function fetch30DayAnalytics(eventFilters = ['app.opened', 'app.broughtToF
 
 // HTTP endpoint for analytics
 exports.get30DayAnalytics = onRequest(async (request, response) => {
-  // Enable CORS
   response.set('Access-Control-Allow-Origin', '*');
   response.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   response.set('Access-Control-Allow-Headers', 'Content-Type');
